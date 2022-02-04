@@ -35,18 +35,18 @@ func main() {
 			cam_id := gjson.ParseBytes(reqdata).Get("camera.%did").Int()
 
 			if tracker, ok := trackerCash[cam_id]; ok {
-				do_track(reqdata, tracker, image_width, image_height)
+				track(reqdata, tracker, image_width, image_height)
 			} else {
 				tracker := NewTracker(*maxlost, *ioutr)
 				trackerCash[cam_id] = &tracker
-				do_track(reqdata, &tracker, image_width, image_height)
+				track(reqdata, &tracker, image_width, image_height)
 			}
 		}
 
 	}
 }
 
-func do_track(reqdata []byte, tracker *Tracker, width float64, height float64) {
+func track(reqdata []byte, tracker *Tracker, width float64, height float64) {
 
 	items := gjson.ParseBytes(reqdata).Get("items")
 	if len(items.Array()) == 0 {
