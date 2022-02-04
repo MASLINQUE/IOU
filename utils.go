@@ -70,28 +70,3 @@ func ResizeFromCenter(bbox []float64, scale float64) []float64 {
 	bbox2[3] = math.Min(bbox[3]+dy+h, 99999)
 	return bbox2
 }
-
-func fl(d ...float64) []float64 {
-	return d
-}
-
-//   Takes a bounding box in the form [x1,y1,x2,y2] and returns z in the form
-//     [x,y,s,r] where x,y is the centre of the box and s is the scale/area and r is
-//     the aspect ratio
-func convertBBoxToZ(bbox []float64) []float64 {
-	w := bbox[2] - bbox[0]
-	h := bbox[3] - bbox[1]
-	x := bbox[0] + w/2.
-	y := bbox[1] + h/2.
-	s := w * h
-	r := w / float64(h)
-	return []float64{x, y, s, r}
-}
-
-//   Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
-//     [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right
-func convertZToBBox(x []float64) []float64 {
-	w := math.Sqrt(x[2] * x[3])
-	h := x[2] / w
-	return []float64{x[0] - w/2., x[1] - h/2., x[0] + w/2., x[1] + h/2.}
-}

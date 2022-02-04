@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
@@ -19,18 +20,8 @@ var trackerCash = map[int64]*Tracker{}
 func main() {
 
 	// open output file
-	fo, err := os.Create("debug.txt")
-	if err != nil {
-		panic(err)
-	}
-	// close fo on exit and check for its returned error
-	defer func() {
-		if err := fo.Close(); err != nil {
-			panic(err)
-		}
-	}()
+
 	// make a write buffer
-	w := bufio.NewWriter(fo)
 	logrus.SetLevel(logrus.DebugLevel)
 	s := bufio.NewScanner(os.Stdin)
 	bufsize := 10 << 20
@@ -39,12 +30,10 @@ func main() {
 	for {
 		if s.Scan() {
 			reqdata := s.Bytes()
-			if _, err := w.Write(reqdata); err != nil {
-				panic(err)
-			}
 			image_width := gjson.ParseBytes(reqdata).Get("info.width").Float()
 			image_height := gjson.ParseBytes(reqdata).Get("info.height").Float()
 			cam_id := gjson.ParseBytes(reqdata).Get("camera.%did").Int()
+
 			if tracker, ok := trackerCash[cam_id]; ok {
 				do_track(reqdata, tracker, image_width, image_height)
 			} else {
@@ -58,12 +47,38 @@ func main() {
 }
 
 func do_track(reqdata []byte, tracker *Tracker, width float64, height float64) {
+
 	items := gjson.ParseBytes(reqdata).Get("items")
-	track_items := []gjson.Result{}
-	track_items = append(track_items, items.Array()...)
-	itemzzzzz, _ := tracker.Updatez(track_items, width, height)
-	test := fmt.Sprintf("%s", itemzzzzz)
-	reqdata_st, _ := sjson.SetRaw(string(reqdata), "items", test)
+	if len(items.Array()) == 0 {
+		fmt.Println(string(reqdata))
+		return
+	}
+	itemsArray := []gjson.Result{}
+	itemsArray = append(itemsArray, items.Array()...)
+
+	bboxesAndIDs, _ := tracker.Update(itemsArray)
+	responseStringArray := []string{}
+
+	for _, item := range itemsArray {
+		bbox_det := []float64{}
+		item_str := item.String()
+		item.Get("bbox").ForEach(func(key, value gjson.Result) bool {
+			bbox_det = append(bbox_det, value.Num)
+			return true
+		})
+		bbox_det = []float64{bbox_det[0], bbox_det[1], bbox_det[0] + bbox_det[2], bbox_det[1] + bbox_det[3]}
+		for _, bbox_trc := range bboxesAndIDs {
+			iou := IOU(bbox_det, bbox_trc)
+			if iou > 0.97 {
+				item_str, _ = sjson.Set(item_str, "id", bbox_trc[len(bbox_trc)-1])
+				responseStringArray = append(responseStringArray, item_str)
+				break
+			}
+		}
+	}
+	responseString := fmt.Sprintf("[%s]", strings.Join(responseStringArray, ", "))
+
+	reqdata_st, _ := sjson.SetRaw(string(reqdata), "items", responseString)
 	fmt.Println(string(reqdata_st))
 
 }

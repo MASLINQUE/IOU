@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 type Tracker struct {
@@ -60,16 +57,16 @@ func NewTracker(maxLost int, iouThreshold float64) Tracker {
 	}
 }
 
-func (s *Track) Update(frame int, newTrack Track, iouScore float64) {
-	s.Bbox = newTrack.Bbox
-	s.ID = newTrack.ID
-	s.Prob = newTrack.Prob
-	s.IOUScore = iouScore
-	s.Age = s.Age + 1
+// func (s *Track) Update(frame int, newTrack Track, iouScore float64) {
+// 	s.Bbox = newTrack.Bbox
+// 	s.ID = newTrack.ID
+// 	s.Prob = newTrack.Prob
+// 	s.IOUScore = iouScore
+// 	s.Age = s.Age + 1
 
-}
+// }
 
-func (s *Track) Updatez(bbox []float64, prob float64) {
+func (s *Track) Update(bbox []float64, prob float64) {
 	s.Bbox = bbox
 	s.Age = s.Age + 1
 	s.Prob = prob
@@ -106,41 +103,7 @@ func (s *Tracker) AddTrack(bbox []float64, prob float64) {
 	s.Tracks = append(s.Tracks, &new_track)
 }
 
-func (s *Tracker) Update(dets [][]float64) {
-	s.FrameCount = s.FrameCount + 1
-	updates_track := []int{}
-	deleted_tracks := []int{}
-	for ind, track := range s.Tracks {
-		if len(dets) > 0 {
-			index, best_match := MatchBboxes(track, dets)
-			iou := IOU(best_match.Bbox, track.Bbox)
-			if iou >= s.iouThreshold {
-				track.Update(s.FrameCount, best_match, iou)
-				updates_track = append(updates_track, track.ID)
-				RemoveByIndex(dets, index)
-			}
-		}
-		if len(updates_track) == 0 || track.ID != updates_track[len(updates_track)-1] {
-			track.Lost++
-			if track.Lost > s.maxLost {
-				deleted_tracks = append(deleted_tracks, ind)
-			}
-
-		}
-	}
-	if len(deleted_tracks) > 0 {
-		s.RemoveTrackByIndexs(deleted_tracks)
-	}
-
-	for _, detect := range dets {
-		bbox := []float64{detect[0], detect[1], detect[0] + detect[2], detect[1] + detect[3]}
-		prob := detect[4]
-		s.AddTrack(bbox, prob)
-	}
-
-}
-
-func (s *Tracker) Updatez(items []gjson.Result, width float64, height float64) ([]string, error) {
+func (s *Tracker) Update(items []gjson.Result) ([][]float64, [][]float64) {
 
 	dets := [][]float64{}
 	for _, item := range items {
@@ -149,41 +112,28 @@ func (s *Tracker) Updatez(items []gjson.Result, width float64, height float64) (
 			bbox = append(bbox, value.Num)
 			return true
 		})
-		bbox = []float64{bbox[0] * width, bbox[1] * height, bbox[0]*width + bbox[2]*width, bbox[1]*height + bbox[3]*height}
+		bbox = []float64{bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]}
 		bbox_prob := append(bbox, item.Get("prob").Num)
 		dets = append(dets, bbox_prob)
-		// logrus.Debugf("SORT Update dets=%v iouThreshold=%f", bbox_prob, s.iouThreshold)
 	}
-	items_string := []string{}
-	for _, item := range items {
-		items_string = append(items_string, item.String())
+	bboxesAndID := [][]float64{}
 
-	}
 	s.FrameCount = s.FrameCount + 1
 
 	matched, unmatchedDets, unmatchedTrks := associateDetectionsToTrackers(dets, s.Tracks, s.iouThreshold)
 
-	// logrus.Debugf("Detection X Trackers. matched=%v unmatchedDets=%v unmatchedTrks=%v", matched, unmatchedDets, unmatchedTrks)
-	// logrus.Debugf("CHECK %v", 1)
-	// update matched trackers with assigned detections
-
 	for t := range s.Tracks {
 		tracker := s.Tracks[t]
-		// logrus.Debugf("Matched t %v, len Trackers %v, unmatchedTrks %v", t, len(s.Tracks), unmatchedTrks)
-		//is this tracker still matched?
+
 		if !contains(unmatchedTrks, t) {
 			for _, det := range matched {
-				logrus.Debugf("Det %v", det)
 				if det[1] == t {
 					bbox := dets[det[0]]
-					// logrus.Debugf("CHECK %v", 1)
-					tracker.Updatez(bbox[:len(bbox)-1], bbox[len(bbox)-1])
-					// logrus.Debugf("CHECK %v", 2)
-					// pathkey := fmt.Sprintf("id", tracker.ID)
-					items_string[det[0]], _ = sjson.Set(items_string[det[0]], "id", strconv.FormatInt(int64(tracker.ID), 10))
-					// logrus.Debugf("CHECK %v", 3)
-					// reqdata, _ = sjson.SetBytes(reqdata, pathkey, strconv.FormatInt(int64(tracker.Tracks[ind].ID), 10))
-					// logrus.Debugf("Tracker updated. id=%d bbox=%v updates=%d\n", tracker.ID, bbox, tracker.Age)
+					tracker.Update(bbox[:len(bbox)-1], bbox[len(bbox)-1])
+
+					bboxID := bbox[:len(bbox)-1]
+					bboxID = append(bboxID, float64(tracker.ID))
+					bboxesAndID = append(bboxesAndID, bboxID)
 					break
 				}
 			}
@@ -192,58 +142,32 @@ func (s *Tracker) Updatez(items []gjson.Result, width float64, height float64) (
 
 	// create and initialise new trackers for unmatched detections
 	for _, udet := range unmatchedDets {
-		// logrus.Debugf("CHECK %v", 5)
-		// aread := Area(dets[udet])
-		// if aread < 1 {
-		// 	logrus.Debugf("Ignoring too small detection. bbox=%f area=%f", dets[udet], aread)
-		// 	continue
-		// }
 
-		s.AddTrack(dets[udet], dets[udet][4])
-		// logrus.Debugf("CHECK %v", 6)
-		// pathkey := fmt.Sprintf("id", s.Tracks[len(s.Tracks)-1].ID)
-		items_string[udet], _ = sjson.Set(items_string[udet], "id", strconv.FormatInt(int64(s.Tracks[len(s.Tracks)-1].ID), 10))
-		// logrus.Debugf("CHECK %v", 7)
-		// logrus.Debugf("New tracker added. id=%d bbox=%v\n", s.Tracks[len(s.Tracks)-1].ID, s.Tracks[len(s.Tracks)-1].Bbox)
+		s.AddTrack(dets[udet][:4], dets[udet][4])
+		ls_bbox := s.Tracks[len(s.Tracks)-1].Bbox
+		ls_bbox = append(ls_bbox, float64(s.Tracks[len(s.Tracks)-1].ID))
+
+		bboxesAndID = append(bboxesAndID, ls_bbox)
 	}
 	delete_ind := []int{}
 	for _, i := range unmatchedTrks {
 		trk := s.Tracks[i]
 		trk.Lost++
-		// logrus.Debugf("May be delete trackers. id=%d bbox=%v lost=%d\n", trk.ID, trk.Bbox, trk.Lost)
-		// logrus.Debugf("CHECK %v", 8)
+
 		if trk.Lost > s.maxLost {
 			delete_ind = append(delete_ind, i)
-			// s.Tracks = append(s.Tracks[:i], s.Tracks[i+1:]...)
-			// logrus.Debugf("Tracker removed. id=%d, bbox=%v updates=%d\n", trk.ID, trk.Bbox, trk.Age)
 		}
 	}
 	if len(delete_ind) > 0 {
-		// logrus.Debugf("CHECK %v", 9)
 		s.RemoveTrackByIndexs(delete_ind)
-		// logrus.Debugf("CHECK %v", 10)
 	}
-
-	//remove dead trackers
-	// ti := len(s.Tracks)
-	// for t := ti - 1; t >= 0; t-- {
-	// 	trk := s.Tracks[t]
-
-	// 	trk.Lost++
-	// 	logrus.Debugf("May be delete trackers. id=%d bbox=%v lost=%d\n", trk.ID, trk.Bbox, trk.Lost)
-	// 	if trk.Lost > s.maxLost+1 {
-	// 		s.Tracks = append(s.Tracks[:t], s.Tracks[t+1:]...)
-	// 		logrus.Debugf("Tracker removed. id=%d, bbox=%v updates=%d\n", trk.ID, trk.Bbox, trk.Age)
-	// 	}
-	// }
 
 	ct := ""
 	for _, v := range s.Tracks {
 		ct = ct + fmt.Sprintf("[id=%d bbox=%v updates=%d] ", v.ID, v.Bbox, v.Age)
 	}
-	// logrus.Debugf("Current trackers=%s", ct)
 
-	return items_string, nil
+	return bboxesAndID, dets
 }
 
 func contains(list []int, value int) bool {
@@ -275,11 +199,8 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 		for t := 0; t < lt; t++ {
 			unmatchedTrackers = append(unmatchedTrackers, t)
 		}
-		// // fmt.Printf(">>>>EMPTY DETECTIONS %d %d", ld, lt)
 		return [][]int{}, []int{}, unmatchedTrackers
 	}
-
-	// iouMatrix := make([][]float64, ld)
 
 	mk := Munkres{}
 	mk.Init(int(ld), int(lt))
@@ -289,7 +210,6 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 	}
 	// ============================================================
 	for d := 0; d < ld; d++ {
-		// iouMatrix[d] = make([]float64, lt)
 		for t := 0; t < lt; t++ {
 			trk := trackers[t]
 
@@ -301,14 +221,6 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 		}
 	}
 
-	// ============================================================
-	// mm := munkres.NewMatrix(ld, lt)
-	//initialize IOUS cost matrix
-	// ious := make([][]float64, ld)
-	// for i := 0; i < len(ious); i++ {
-	// 	ious[i] = make([]float64, lt)
-	// }
-
 	//calculate best DETECTION vs TRACKER matches according to COST matrix
 	mk.SetCostMatrix(ious)
 	mk.Run()
@@ -318,8 +230,6 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 			matchedIndices = append(matchedIndices, []int{i, j})
 		}
 	}
-
-	// logrus.Debugf("Detection x Tracker match=%v", matchedIndices)
 
 	unmatchedDetections := make([]int, 0)
 	for d := 0; d < ld; d++ {
@@ -331,7 +241,6 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 			}
 		}
 		if !found {
-			// logrus.Debugf("Unmatched detection found. bbox=%v", detections[d])
 			unmatchedDetections = append(unmatchedDetections, d)
 		}
 	}
@@ -354,9 +263,7 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 	for _, mi := range matchedIndices {
 		//filter out matched with low IOU
 		iou := 1 - ious[mi[0]][mi[1]]
-		// logrus.Debugf("IOU iou=%v", ious)
 		if iou < iouThreshold {
-			// logrus.Debugf("Skipping detection/tracker because it has low IOU deti=%d trki=%d iou=%f", mi[0], mi[1], iou)
 			unmatchedDetections = append(unmatchedDetections, mi[0])
 			unmatchedTrackers = append(unmatchedTrackers, mi[1])
 		} else {
