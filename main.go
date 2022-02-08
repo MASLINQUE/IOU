@@ -70,7 +70,7 @@ func track(reqdata []byte, tracker *Tracker, width float64, height float64) {
 		for _, bbox_trc := range bboxesAndIDs {
 			iou := IOU(bbox_det, bbox_trc)
 			if iou > 0.97 {
-				item_str, _ = sjson.Set(item_str, "id", bbox_trc[len(bbox_trc)-1])
+				item_str, _ = sjson.Set(item_str, "id", fmt.Sprintf("%.0f", bbox_trc[len(bbox_trc)-1]))
 				responseStringArray = append(responseStringArray, item_str)
 				break
 			}

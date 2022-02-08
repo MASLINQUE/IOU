@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-
+	"github.com/cpmech/gosl/graph"
 	"github.com/tidwall/gjson"
 )
 
@@ -202,7 +202,7 @@ func associateDetectionsToTrackers(detections [][]float64, trackers []*Track, io
 		return [][]int{}, []int{}, unmatchedTrackers
 	}
 
-	mk := Munkres{}
+	mk := graph.Munkres{}
 	mk.Init(int(ld), int(lt))
 	ious := make([][]float64, ld)
 	for i := 0; i < len(ious); i++ {

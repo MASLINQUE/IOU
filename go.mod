@@ -1,9 +1,9 @@
-module trunov/IOU
+module trunov/iou
 
 go 1.17
 
 require (
-	github.com/cpmech/gosl v1.2.11
+	github.com/cpmech/gosl v1.1.3
 	github.com/sirupsen/logrus v1.8.1
 	github.com/tidwall/gjson v1.12.1
 	github.com/tidwall/sjson v1.2.3
