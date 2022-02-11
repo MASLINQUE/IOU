@@ -20,7 +20,7 @@ var trackerCash = map[int64]*Tracker{}
 func main() {
 
 	// open output file
-
+	flag.Parse()
 	// make a write buffer
 	logrus.SetLevel(logrus.DebugLevel)
 	s := bufio.NewScanner(os.Stdin)
@@ -68,8 +68,9 @@ func track(reqdata []byte, tracker *Tracker, width float64, height float64) {
 		})
 		bbox_det = []float64{bbox_det[0], bbox_det[1], bbox_det[0] + bbox_det[2], bbox_det[1] + bbox_det[3]}
 		for _, bbox_trc := range bboxesAndIDs {
-			iou := IOU(bbox_det, bbox_trc)
-			if iou > 0.97 {
+			// log.Printf("bbox_det %v, bbox_trc %v, iou -- %v", bbox_det, bbox_trc, mathBboxes(bbox_det, bbox_trc))
+
+			if mathBboxes(bbox_det, bbox_trc) {
 				item_str, _ = sjson.Set(item_str, "id", fmt.Sprintf("%.0f", bbox_trc[len(bbox_trc)-1]))
 				responseStringArray = append(responseStringArray, item_str)
 				break

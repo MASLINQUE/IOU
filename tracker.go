@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/cpmech/gosl/graph"
 	"github.com/tidwall/gjson"
 )
@@ -128,6 +129,7 @@ func (s *Tracker) Update(items []gjson.Result) ([][]float64, [][]float64) {
 		if !contains(unmatchedTrks, t) {
 			for _, det := range matched {
 				if det[1] == t {
+
 					bbox := dets[det[0]]
 					tracker.Update(bbox[:len(bbox)-1], bbox[len(bbox)-1])
 
