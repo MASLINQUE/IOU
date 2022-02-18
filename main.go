@@ -53,13 +53,11 @@ func track(reqdata []byte, tracker *Tracker, width float64, height float64) {
 		fmt.Println(string(reqdata))
 		return
 	}
-	itemsArray := []gjson.Result{}
-	itemsArray = append(itemsArray, items.Array()...)
 
-	bboxesAndIDs, _ := tracker.Update(itemsArray)
+	bboxesAndIDs, _ := tracker.Update(items.Array())
 	responseStringArray := []string{}
 
-	for _, item := range itemsArray {
+	for _, item := range items.Array() {
 		bbox_det := []float64{}
 		item_str := item.String()
 		item.Get("bbox").ForEach(func(key, value gjson.Result) bool {
